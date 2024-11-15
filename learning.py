@@ -1,10 +1,57 @@
 import streamlit as st
 from PIL import Image
-from io import BytesIO
+import io
 import base64
 from streamlit_cropper import st_cropper
+from io import BytesIO
+import convertapi
 
-# SVG template that will contain the cropped image
+
+def image_to_base64(img):
+    buffered = io.BytesIO()
+    img.save(buffered, format="PNG")
+    img_str = base64.b64encode(buffered.getvalue()).decode("utf-8")
+    return img_str
+
+# Function to convert SVG to base64 string
+def svg_to_base64(svg):
+    svg_bytes = svg.encode('utf-8')
+    svg_base64 = base64.b64encode(svg_bytes).decode('utf-8')
+    return svg_base64
+
+convertapi.api_secret = 'secret_NUcbMFpZgx4pZvQI'
+
+# Set page config
+st.set_page_config(page_title="Enhanced UI", layout="centered")
+
+cover_image_url = "https://res.cloudinary.com/startup-grind/image/upload/c_scale,w_2560/c_crop,h_640,w_2560,y_0.0_mul_h_sub_0.0_mul_640/c_crop,h_640,w_2560/c_fill,dpr_2.0,f_auto,g_center,q_auto:good/v1/gcs/platform-data-goog/event_banners/banner_devfest24_uy42yXv.png"
+st.image(cover_image_url, use_column_width=True)
+
+st.markdown("""
+    <style>
+    .stDownloadButton > button {
+        background-color: #4285F4;
+        color: black;
+        font-family: 'Poppins', sans-serif;
+    }
+    .stDownloadButton > button:hover {
+        background-color: #357ae8;
+    }
+    .footer {
+        position: fixed;
+        left: 0;
+        bottom: 0;
+        width: 100%;
+        background-color: white;
+        text-align: center;
+        padding: 10px 0;
+    }
+    </style>
+    """, unsafe_allow_html=True)
+
+# File uploader
+uploaded_file = st.file_uploader("Choose an image", type=["png", "jpg", "jpeg"])
+
 svg_template = """
 <svg width="340" height="640" viewBox="0 0 1080 1920" fill="none" xmlns="http://www.w3.org/2000/svg">
 <rect width="1080" height="1920" fill="#1E1E1E"/>
@@ -181,75 +228,69 @@ svg_template = """
 </clipPath>
 </defs>
 </svg>
-"""
-def svg_to_base64(svg_output):
-    return base64.b64encode(svg_output.encode()).decode()
+"""  # Keep this placeholder, as you'll fill in later.
 
-# Function to generate the SVG output with the cropped image
-def generate_svg(cropped_image):
+# Convert image to base64 for sharing
+def image_to_base64(img):
+    buffered = BytesIO()
+    img.save(buffered, format="PNG")
+    img_str = base64.b64encode(buffered.getvalue()).decode("utf-8")
+    return img_str
+
+if uploaded_file is not None:
+    # Load the image
+    image = Image.open(uploaded_file)
+
+    # Crop the image using streamlit-cropper
+    st.write("Crop the image as needed:")
+    cropped_image = st_cropper(image, realtime_update=True, box_color="blue", aspect_ratio=(1, 1))
+
+    # Prepare cropped image for SVG and sharing
     buffered = BytesIO()
     cropped_image.save(buffered, format="PNG")
     image_data = base64.b64encode(buffered.getvalue()).decode()
-    return svg_template.format(image_data=image_data)
 
-def main():
-    st.title("SVG Share Example")
+    # Generate the SVG output
+    svg_output = svg_template.format(image_data=image_data)
 
-    uploaded_file = st.file_uploader("Upload an image", type=["png", "jpg"])
+    # Convert the SVG output to base64
+    svg_base64 = svg_to_base64(svg_output)
 
-    if uploaded_file is not None:
-        # Load the image
-        image = Image.open(uploaded_file)
+    # Share button with JavaScript functionality
+    share_button_html = f"""
+    <button id="shareBtn">Share SVG</button>
+    <p class="result"></p>
+    <script>
+      const shareData = {{
+        title: "Shared SVG",
+        text: "Check out this awesome SVG!",
+        url: "data:image/svg+xml;base64,{svg_base64}"
+      }};
 
-        # Crop the image using streamlit-cropper
-        st.write("Crop the image as needed:")
-        cropped_image = st_cropper(image, realtime_update=True, box_color="blue", aspect_ratio=(1, 1))
+      const btn = document.getElementById("shareBtn");
+      const resultPara = document.querySelector(".result");
 
-        if st.button('Generate SVG'):
-            svg_output = generate_svg(cropped_image)
-            
-            # Convert the SVG output to base64
-            svg_base64 = svg_to_base64(svg_output)
+      btn.addEventListener("click", async () => {{
+        try {{
+          await navigator.share(shareData);
+          resultPara.textContent = "SVG shared successfully";
+        }} catch (err) {{
+          resultPara.textContent = `Error: ${{err}}`;
+        }}
+      }});
+    </script>
+    """
 
-            # Share button with JavaScript functionality
-            share_button_html = f"""
-            <button id="shareBtn">Share SVG</button>
-            <p class="result"></p>
-            <script>
-              const shareData = {{
-                title: "Shared SVG",
-                text: "Check out this awesome SVG!",
-                url: "data:image/svg+xml;base64,{svg_base64}"
-              }};
+    # Display the share button with embedded JavaScript
+    st.markdown(share_button_html, unsafe_allow_html=True)
 
-              const btn = document.getElementById("shareBtn");
-              const resultPara = document.querySelector(".result");
-
-              btn.addEventListener("click", async () => {{
-                try {{
-                  await navigator.share(shareData);
-                  resultPara.textContent = "SVG shared successfully";
-                }} catch (err) {{
-                  resultPara.textContent = 'Error: ' + err.message;
-                }}
-              }});
-            </script>
-            """
-
-            # Display the share button with embedded JavaScript
-            st.markdown(share_button_html, unsafe_allow_html=True)
-
-            # Create the download button
-            st.download_button(
-                label="Download SVG",
-                data=svg_output,
-                file_name="custom_image.svg",
-                mime="image/svg+xml"
-            )
-
-            # Preview the generated SVG
-            st.write("Preview:")
-            st.markdown(svg_output, unsafe_allow_html=True)
+    # Create the download button
+    st.download_button(
+        label="Download SVG",
+        data=svg_output,
+        file_name="custom_image.svg",
+        mime="image/svg+xml"
+    )
 
 # Add footer image
 footer_image_url = "https://www.theticket9.com/wp-content/uploads/2023/10/Devfest-Coimbatore-2024.jpg"
@@ -258,6 +299,3 @@ st.markdown(f"""
         <img src="{footer_image_url}" width="100%">
     </div>
     """, unsafe_allow_html=True)
-
-if __name__ == "__main__":
-    main()
